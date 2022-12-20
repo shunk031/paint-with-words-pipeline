@@ -203,8 +203,8 @@ class PaintWithWordsPipeline(StableDiffusionPipeline):
 
         return ret_tensor
 
-    def load_image(self, image: Union[os.PathLike, PilImage]) -> PilImage:
-        if isinstance(image, os.PathLike):
+    def load_image(self, image: Union[str, os.PathLike, PilImage]) -> PilImage:
+        if isinstance(image, str) or isinstance(image, os.PathLike):
             image = Image.open(image)
 
         if image.mode != "RGB":
