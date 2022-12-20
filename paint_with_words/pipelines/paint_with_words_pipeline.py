@@ -21,6 +21,7 @@ from PIL.Image import Image as PilImage
 from transformers import CLIPFeatureExtractor, CLIPTextModel, CLIPTokenizer
 
 from paint_with_words.helper.aliases import RGB
+from paint_with_words.helper.images import flatten_image_importance
 from paint_with_words.models.attention import paint_with_words_forward
 
 logger = logging.getLogger(__name__)
