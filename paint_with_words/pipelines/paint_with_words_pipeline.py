@@ -374,8 +374,8 @@ class PaintWithWordsPipeline(StableDiffusionPipeline):
                     (i + 1) > num_warmup_steps and (i + 1) % self.scheduler.order == 0
                 ):
                     progress_bar.update()
-                    if callback is not None and i % callback_steps == 0:
-                        callback(i, t, latents)
+                    if callback is not None and i % callback_steps == 0:  # type: ignore
+                        callback(i, t, latents)  # type: ignore
 
         # 8. Post-processing
         image = self.decode_latents(latents)
