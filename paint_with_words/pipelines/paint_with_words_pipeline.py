@@ -1,4 +1,5 @@
 import logging
+import os
 from dataclasses import dataclass
 from typing import Callable, Dict, List, Optional, Union
 
@@ -18,6 +19,7 @@ from diffusers.schedulers import (
     LMSDiscreteScheduler,
     PNDMScheduler,
 )
+from PIL import Image
 from PIL.Image import Image as PilImage
 from transformers import CLIPFeatureExtractor, CLIPTextModel, CLIPTokenizer
 
@@ -75,7 +77,8 @@ class PaintWithWordsPipeline(StableDiffusionPipeline):
         )
 
         # replace scheduler to LMSDiscreteScheduler
-        self.scheduler = LMSDiscreteScheduler.from_config(self.scheduler.config)
+        config = self.scheduler.config  # type: ignore
+        self.scheduler = LMSDiscreteScheduler.from_config(config)
 
         # replace cross attention to the paint with words one
         self.replace_cross_attention()
@@ -200,6 +203,15 @@ class PaintWithWordsPipeline(StableDiffusionPipeline):
 
         return ret_tensor
 
+    def load_image(self, image: Union[os.PathLike, PilImage]) -> PilImage:
+        if isinstance(image, os.PathLike):
+            image = Image.open(image)
+
+        if image.mode != "RGB":
+            image = image.convert("RGB")
+
+        return image
+
     @th.no_grad()
     def __call__(
         self,
@@ -224,6 +236,7 @@ class PaintWithWordsPipeline(StableDiffusionPipeline):
         assert guidance_scale > 1.0, guidance_scale
 
         # 0. Default height and width to unet and resize the color map image
+        color_map_image = self.load_image(image=color_map_image)
         width, height = get_resize_size(img=color_map_image)
         color_map_image = resize_image(img=color_map_image, w=width, h=height)
 
