@@ -155,7 +155,7 @@ def test_separate_image_context(
 ):
     pipe = PaintWithWordsPipeline.from_pretrained(model_name)
 
-    color_map_image = Image.open(color_map_image_path)
+    color_map_image = pipe.load_image(color_map_image_path)
 
     ret_list = pipe.separate_image_context(
         img=color_map_image, color_context=color_context
@@ -189,7 +189,7 @@ def test_calculate_tokens_image_attention_weight(
 ):
     pipe = PaintWithWordsPipeline.from_pretrained(model_name)
 
-    color_map_image = Image.open(color_map_image_path)
+    color_map_image = pipe.load_image(color_map_image_path)
     w, h = color_map_image.size
 
     separated_image_context_list = pipe.separate_image_context(
