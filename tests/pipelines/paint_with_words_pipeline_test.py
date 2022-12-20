@@ -153,7 +153,11 @@ def test_separate_image_context(
     input_prompt: str,
     output_image_path: str,
 ):
-    pipe = PaintWithWordsPipeline.from_pretrained(model_name)
+    pipe = PaintWithWordsPipeline.from_pretrained(
+        model_name,
+        revision="fp16",
+        torch_dtype=torch.float16,
+    )
 
     color_map_image = pipe.load_image(color_map_image_path)
 
@@ -187,7 +191,11 @@ def test_calculate_tokens_image_attention_weight(
     input_prompt: str,
     output_image_path: str,
 ):
-    pipe = PaintWithWordsPipeline.from_pretrained(model_name)
+    pipe = PaintWithWordsPipeline.from_pretrained(
+        model_name,
+        revision="fp16",
+        torch_dtype=torch.float16,
+    )
 
     color_map_image = pipe.load_image(color_map_image_path)
     w, h = color_map_image.size
