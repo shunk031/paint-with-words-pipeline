@@ -12,6 +12,9 @@ def model_name() -> str:
 def test_get_resize_size():
 
     image = Image.new(mode="RGB", size=(555, 555), color=(0, 0, 0))
+    assert get_resize_size(img=image) == (544, 544)
+
+    image = Image.new(mode="RGB", size=(543, 543), color=(0, 0, 0))
     assert get_resize_size(img=image) == (512, 512)
 
     image = Image.new(mode="RGB", size=(130, 130), color=(0, 0, 0))
