@@ -216,6 +216,21 @@ pycodestyle = ">=2.10.0,<2.11.0"
 pyflakes = ">=3.0.0,<3.1.0"
 
 [[package]]
+name = "ftfy"
+version = "6.1.1"
+description = "Fixes mojibake and other problems with Unicode, after the fact"
+category = "main"
+optional = false
+python-versions = ">=3.7,<4"
+files = [
+    {file = "ftfy-6.1.1-py3-none-any.whl", hash = "sha256:0ffd33fce16b54cccaec78d6ec73d95ad370e5df5a25255c8966a6147bd667ca"},
+    {file = "ftfy-6.1.1.tar.gz", hash = "sha256:bfc2019f84fcd851419152320a6375604a0f1459c281b5b199b2cd0d2e727f8f"},
+]
+
+[package.dependencies]
+wcwidth = ">=0.2.5"
+
+[[package]]
 name = "huggingface-hub"
 version = "0.11.1"
 description = "Client library to download and publish models, datasets and other repos on the huggingface.co hub"
@@ -894,25 +909,8 @@ version = "1.12.1+cu113"
 description = "Tensors and Dynamic neural networks in Python with strong GPU acceleration"
 category = "main"
 optional = false
-python-versions = ">=3.7.0"
-files = [
-    {file = "torch-1.12.1+cu113-cp310-cp310-linux_x86_64.whl", hash = "sha256:be682ef94e37cd3f0768b8ce6106705410189df2c365d65d7bc1bebb302d84cd"},
-    {file = "torch-1.12.1+cu113-cp310-cp310-win_amd64.whl", hash = "sha256:8b83783f6537b48b75b6ba5d62d7acfd94546689223bb0d3a7d39886148b8d17"},
-    {file = "torch-1.12.1+cu113-cp37-cp37m-linux_x86_64.whl", hash = "sha256:d8747d7d8add62213adb2ccf0e143aa9364d1e16c7e4bcdf45e302bc84404368"},
-    {file = "torch-1.12.1+cu113-cp37-cp37m-win_amd64.whl", hash = "sha256:b331dc5ab6aeb092e849addb2a0490623988033befc54b4ff3e1a8e88fbc6fd2"},
-    {file = "torch-1.12.1+cu113-cp38-cp38-linux_x86_64.whl", hash = "sha256:4adf483ac2d047534a7d023f0022bd8694d87627068ad6dddf186cb3273bbfa2"},
-    {file = "torch-1.12.1+cu113-cp38-cp38-win_amd64.whl", hash = "sha256:9852174c19d753b071393da6f45a2b3f68d94cfbf1ee85a85d1a1870da5aec48"},
-    {file = "torch-1.12.1+cu113-cp39-cp39-linux_x86_64.whl", hash = "sha256:01854806973840bdf3fc0efc84811539cb37101afd6498ef24a7d7f1af3cb010"},
-    {file = "torch-1.12.1+cu113-cp39-cp39-win_amd64.whl", hash = "sha256:b20d19c379c8fc71f04f49b35c867732f0dfa19ec046af218dc77458c05424f7"},
-]
-
-[package.dependencies]
-typing-extensions = "*"
-
-[package.source]
-type = "legacy"
-url = "https://download.pytorch.org/whl/cu113"
-reference = "pytorch-cu113"
+python-versions = "*"
+files = []
 
 [[package]]
 name = "torchvision"
@@ -920,32 +918,8 @@ version = "0.13.1+cu113"
 description = "image and video datasets and models for torch deep learning"
 category = "main"
 optional = false
-python-versions = ">=3.7"
-files = [
-    {file = "torchvision-0.13.1+cu113-cp310-cp310-linux_x86_64.whl", hash = "sha256:b471090622d074d19fadacbc91ec02ddc1972d2fa4ada7f1c8a087bca3a5bcb0"},
-    {file = "torchvision-0.13.1+cu113-cp310-cp310-win_amd64.whl", hash = "sha256:ee7882e31ef973e2cf067d88ddef0a8f5b369c2dd9195236b90b479de0507c15"},
-    {file = "torchvision-0.13.1+cu113-cp37-cp37m-linux_x86_64.whl", hash = "sha256:6c991eb66a3a7be8ee9828d5836f20056c71d644aa1b1f9ed8ce6c60f48616a6"},
-    {file = "torchvision-0.13.1+cu113-cp37-cp37m-win_amd64.whl", hash = "sha256:6f2ef75ffee5549f57c1e77b1efb6e7801ab7b54692c86d3f72f778efa0a81d3"},
-    {file = "torchvision-0.13.1+cu113-cp38-cp38-linux_x86_64.whl", hash = "sha256:899cac298d2a7cf6a8ca62d3ede2a7d3f50b86027f8be2d15639baf74da5d8f0"},
-    {file = "torchvision-0.13.1+cu113-cp38-cp38-win_amd64.whl", hash = "sha256:1b87006748e9eb6bd5bb9f544e685d37b6bdae07b48370bdfe3bbd4ac8f057cf"},
-    {file = "torchvision-0.13.1+cu113-cp39-cp39-linux_x86_64.whl", hash = "sha256:2fa135937c65b1bb8e3bf8f620c4fb755c0cd02b1f57ba1d6f9c09467a9b70cf"},
-    {file = "torchvision-0.13.1+cu113-cp39-cp39-win_amd64.whl", hash = "sha256:bb22ac5e7bd526c45b00825dcf0e300fde14d8f1c0459833d276cf12f4642a61"},
-]
-
-[package.dependencies]
-numpy = "*"
-pillow = ">=5.3.0,<8.3.0 || >=8.4.0"
-requests = "*"
-torch = "1.12.1"
-typing-extensions = "*"
-
-[package.extras]
-scipy = ["scipy"]
-
-[package.source]
-type = "legacy"
-url = "https://download.pytorch.org/whl/cu113"
-reference = "pytorch-cu113"
+python-versions = "*"
+files = []
 
 [[package]]
 name = "tqdm"
@@ -1064,6 +1038,18 @@ secure = ["certifi", "cryptography (>=1.3.4)", "idna (>=2.0.0)", "ipaddress", "p
 socks = ["PySocks (>=1.5.6,!=1.5.7,<2.0)"]
 
 [[package]]
+name = "wcwidth"
+version = "0.2.5"
+description = "Measures the displayed width of unicode strings in a terminal"
+category = "main"
+optional = false
+python-versions = "*"
+files = [
+    {file = "wcwidth-0.2.5-py2.py3-none-any.whl", hash = "sha256:beb4802a9cebb9144e99086eff703a642a13d6a0052920003a230f3294bbe784"},
+    {file = "wcwidth-0.2.5.tar.gz", hash = "sha256:c4d647b99872929fdb7bdcaa4fbe7f01413ed3d98077df798530e5b04f116c83"},
+]
+
+[[package]]
 name = "zipp"
 version = "3.11.0"
 description = "Backport of pathlib-compatible object wrapper for zip files"
@@ -1081,5 +1067,5 @@ testing = ["flake8 (<5)", "func-timeout", "jaraco.functools", "jaraco.itertools"
 
 [metadata]
 lock-version = "2.0"
-python-versions = "^3.9"
-content-hash = "ffdf7f952cd7afe3ba859a5b4cc56629bb5958e17aff9abc27d58c774d1e8c84"
+python-versions = ">=3.8.1,<4.0"
+content-hash = "80b205e26e887366d125ca48a18c21ca260b74672862be00e2273fe597096bee"

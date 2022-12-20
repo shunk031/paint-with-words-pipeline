@@ -7,13 +7,14 @@ readme = "README.md"
 packages = [{include = "paint_with_words"}]
 
 [tool.poetry.dependencies]
-python = "^3.8"
+python = ">=3.8.1,<4.0"
 diffusers = "^0.10.2"
 transformers = "^4.25.1"
 torch = "^1.12.1"
 torchvision = "^0.13.1"
 accelerate = "^0.15.0"
 scipy = "^1.9.3"
+ftfy = "^6.1.1"
 
 [tool.poetry.group.dev.dependencies]
 black = "^22.12.0"
