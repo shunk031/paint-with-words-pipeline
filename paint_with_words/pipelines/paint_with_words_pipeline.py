@@ -138,32 +138,53 @@ class PaintWithWordsPipeline(StableDiffusionPipeline):
 
         return separated_image_and_context
 
-    def _tokens_img_attention_weight(
-        img_context_seperated, tokenized_texts, ratio: int = 8
-    ):
+    def calculate_tokens_image_attention_weight(
+        self,
+        input_prompt: str,
+        separated_image_context_list: List[SeparatedImageContext],
+        ratio: int,
+    ) -> th.Tensor:
 
-        token_lis = tokenized_texts["input_ids"][0].tolist()
-        w, h = img_context_seperated[0][1].shape
+        prompt_token_ids = self.tokenizer(
+            input_prompt,
+            padding="max_length",
+            max_length=self.tokenizer.model_max_length,
+            truncation=True,
+        ).input_ids
 
+        w, h = separated_image_context_list[0].color_map_th.shape
         w_r, h_r = w // ratio, h // ratio
 
-        ret_tensor = torch.zeros((w_r * h_r, len(token_lis)), dtype=torch.float32)
+        ret_tensor = th.zeros(
+            (w_r * h_r, len(prompt_token_ids)), dtype=th.float32, device=self.device
+        )
 
-        for v_as_tokens, img_where_color in img_context_seperated:
-            is_in = 0
+        for separated_image_context in separated_image_context_list:
+            is_in = False
+            context_token_ids = separated_image_context.token_ids
+            context_image_map = separated_image_context.color_map_th
 
-            for idx, tok in enumerate(token_lis):
-                if token_lis[idx : idx + len(v_as_tokens)] == v_as_tokens:
-                    is_in = 1
+            for i, token_id in enumerate(prompt_token_ids):
+                if (
+                    prompt_token_ids[i : i + len(context_token_ids)]
+                    == context_token_ids
+                ):
+                    is_in = True
 
-                    # print(token_lis[idx : idx + len(v_as_tokens)], v_as_tokens)
-                    ret_tensor[:, idx : idx + len(v_as_tokens)] += (
-                        _img_importance_flatten(img_where_color, ratio)
-                        .reshape(-1, 1)
-                        .repeat(1, len(v_as_tokens))
+                    # shape: (w * 1/ratio, h * 1/ratio)
+                    img_importance = flatten_image_importance(
+                        img_th=context_image_map, ratio=ratio
                     )
+                    # shape: ((w * 1/ratio) * (h * 1/ratio), 1)
+                    img_importance = img_importance.view(-1, 1)
+                    # shape: ((w * 1/ratio) * (h * 1/ratio), len(context_token_ids))
+                    img_importance = img_importance.repeat(1, len(context_token_ids))
 
-            if not is_in == 1:
-                print(f"Warning ratio {ratio} : tokens {v_as_tokens} not found in text")
+                    ret_tensor[:, i : i + len(context_token_ids)] += img_importance
+
+            if not is_in:
+                logger.warning(
+                    f"Warning ratio {ratio} : tokens {context_token_ids} not found in text"
+                )
 
         return ret_tensor
