@@ -17,6 +17,8 @@ from diffusers.schedulers import (
 )
 from transformers import CLIPFeatureExtractor, CLIPTextModel, CLIPTokenizer
 
+from paint_with_words.models.attention import paint_with_words_forward
+
 
 @dataclass
 class SeparatedImageContext(object):
@@ -55,12 +57,15 @@ class PaintWithWordsPipeline(StableDiffusionPipeline):
             requires_safety_checker,
         )
 
+        self.replace_cross_attention()
+
     def replace_cross_attention(
         self, cross_attention_name: str = "CrossAttention"
     ) -> None:
-        for _module in unet.modules():
-            if _module.__class__.__name__ == "CrossAttention":
-                _module.__class__.__call__ = inj_forward
+
+        for m in self.unet.modules():
+            if m.__class__.__name__ == cross_attention_name:
+                m.__class__.__call__ = paint_with_words_forward
 
     def _image_context_seperator(
         img: Image.Image, color_context: dict, _tokenizer
