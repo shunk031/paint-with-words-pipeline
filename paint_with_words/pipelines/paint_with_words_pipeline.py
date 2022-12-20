@@ -57,6 +57,10 @@ class PaintWithWordsPipeline(StableDiffusionPipeline):
             requires_safety_checker,
         )
 
+        # replace scheduler to LMSDiscreteScheduler
+        self.scheduler = LMSDiscreteScheduler.from_config(self.scheduler.config)
+
+        # replace cross attention to the paint with words one
         self.replace_cross_attention()
 
     def replace_cross_attention(
