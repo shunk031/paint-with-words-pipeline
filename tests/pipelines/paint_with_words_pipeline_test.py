@@ -2,6 +2,7 @@ from typing import Dict
 
 import pytest
 import torch
+import torch as th
 from diffusers.schedulers import LMSDiscreteScheduler
 from PIL import Image
 
@@ -30,7 +31,7 @@ EXAMPLE_SETTING_1 = {
     },
     "color_map_image_path": "contents/example_input.png",
     "input_prompt": "realistic photo of a dog, cat, tree, with beautiful sky, on sandy ground",
-    "output_img_path": "contents/output_cat_dog.png",
+    "output_image_path": "contents/output_cat_dog.png",
 }
 
 EXAMPLE_SETTING_2 = {
@@ -43,7 +44,7 @@ EXAMPLE_SETTING_2 = {
     },
     "color_map_image_path": "contents/example_input.png",
     "input_prompt": "realistic photo of a dog, cat, tree, with beautiful sky, on sandy ground",
-    "output_img_path": "contents/output_dog_cat.png",
+    "output_image_path": "contents/output_dog_cat.png",
 }
 
 
@@ -57,7 +58,7 @@ EXAMPLE_SETTING_3 = {
     },
     "color_map_image_path": "contents/aurora_2.png",
     "input_prompt": "A digital painting of a half-frozen lake near mountains under a full moon and aurora. A boat is in the middle of the lake. Highly detailed.",
-    "output_img_path": "contents/aurora_2_output.png",
+    "output_image_path": "contents/aurora_2_output.png",
 }
 
 EXAMPLE_SETTING_4 = {
@@ -70,15 +71,18 @@ EXAMPLE_SETTING_4 = {
     },
     "color_map_image_path": "contents/aurora_1.png",
     "input_prompt": "A digital painting of a half-frozen lake near mountains under a full moon and aurora. A boat is in the middle of the lake. Highly detailed.",
-    "output_img_path": "contents/aurora_1_output.png",
+    "output_image_path": "contents/aurora_1_output.png",
 }
 
-EXAMPLES = [
-    (
-        EXAMPLE["color_context"],
-        EXAMPLE["color_map_image_path"],
-        EXAMPLE["input_prompt"],
-    )
+
+ARGNAMES = [
+    "color_context",
+    "color_map_image_path",
+    "input_prompt",
+    "output_image_path",
+]
+ARGVALUES = [
+    [EXAMPLE[name] for name in ARGNAMES]
     for EXAMPLE in [
         EXAMPLE_SETTING_1,
         EXAMPLE_SETTING_2,
@@ -88,26 +92,34 @@ EXAMPLES = [
 ]
 
 
+@pytest.mark.skipif(
+    not th.cuda.is_available(),
+    reason="No GPUs available for testing.",
+)
 @pytest.mark.parametrize(
-    argnames="color_context, color_map_image_path, input_prompt,",
-    argvalues=EXAMPLES,
+    argnames=",".join(ARGNAMES),
+    argvalues=ARGVALUES,
 )
 def test_pipeline(
     model_name: str,
     color_context: Dict[RGB, str],
     color_map_image_path: str,
     input_prompt: str,
+    output_image_path: str,
     gpu_device: str,
 ):
 
+    # load pre-trained weight with paint with words pipeline
     pipe = PaintWithWordsPipeline.from_pretrained(
         model_name,
         revision="fp16",
         torch_dtype=torch.float16,
     )
-    assert isinstance(pipe.scheduler, LMSDiscreteScheduler), type(pipe.scheduler)
     pipe.safety_checker = None  # disable the safety checker
     pipe.to(gpu_device)
+
+    # check the scheduler is LMSDiscreteScheduler
+    assert isinstance(pipe.scheduler, LMSDiscreteScheduler), type(pipe.scheduler)
 
     # generate latents with seed-fixed generator
     generator = torch.manual_seed(0)
@@ -116,7 +128,8 @@ def test_pipeline(
     # load color map image
     color_map_image = Image.open(color_map_image_path).convert("RGB")
 
-    with torch.autocast("cuda"):
+    # generate image using the pipeline
+    with th.autocast("cuda"):
         image = pipe(
             prompt=input_prompt,
             color_context=color_context,
@@ -125,19 +138,20 @@ def test_pipeline(
             num_inference_steps=30,
         ).images[0]
 
-    image.save("generated_image.png")
-    color_map_image.save("color_map.png")
+    # save the generated image
+    image.save(output_image_path)
 
 
 @pytest.mark.parametrize(
-    argnames="color_context, color_map_image_path, input_prompt,",
-    argvalues=EXAMPLES,
+    argnames=",".join(ARGNAMES),
+    argvalues=ARGVALUES,
 )
 def test_separate_image_context(
     model_name: str,
     color_context: Dict[RGB, str],
     color_map_image_path: str,
     input_prompt: str,
+    output_image_path: str,
 ):
     pipe = PaintWithWordsPipeline.from_pretrained(model_name)
 
@@ -163,14 +177,15 @@ def test_separate_image_context(
 
 
 @pytest.mark.parametrize(
-    argnames="color_context, color_map_image_path, input_prompt,",
-    argvalues=EXAMPLES,
+    argnames=",".join(ARGNAMES),
+    argvalues=ARGVALUES,
 )
 def test_calculate_tokens_image_attention_weight(
     model_name: str,
     color_context: Dict[RGB, str],
     color_map_image_path: str,
     input_prompt: str,
+    output_image_path: str,
 ):
     pipe = PaintWithWordsPipeline.from_pretrained(model_name)
 
