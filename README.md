@@ -1,4 +1,4 @@
-# Paint-with-Words, Implemented with [Stable diffusion](https://github.com/CompVis/stable-diffusion) using [Diffuers pipeline](https://github.com/huggingface/diffusers)
+# [Paint-with-Words](https://arxiv.org/abs/2211.01324), Implemented with [Stable diffusion](https://github.com/CompVis/stable-diffusion) using [Diffuers pipeline](https://github.com/huggingface/diffusers)
 
 [![CoRR preprint arXiv:2211.01324](http://img.shields.io/badge/cs.CL-arXiv%3A2211.01324-B31B1B.svg)](https://arxiv.org/abs/2211.01324)
 [![CI](https://github.com/shunk031/paint-with-words-pipeline/actions/workflows/ci.yaml/badge.svg)](https://github.com/shunk031/paint-with-words-pipeline/actions/workflows/ci.yaml)
