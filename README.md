@@ -1,4 +1,11 @@
-# Paint-with-Words, Implemented with Stable diffusion
+# Paint-with-Words, Implemented with Stable diffusion using Diffuers pipeline
+
+[![CoRR preprint arXiv:2211.01324](http://img.shields.io/badge/cs.CL-arXiv%3A2211.01324-B31B1B.svg)](https://arxiv.org/abs/2211.01324)
+[![CI](https://github.com/shunk031/paint-with-words-pipeline/actions/workflows/ci.yaml/badge.svg)](https://github.com/shunk031/paint-with-words-pipeline/actions/workflows/ci.yaml)
+![Python](https://img.shields.io/badge/python-3.8%20%7C%203.9%20%7C%203.10-blue?logo=python)
+
+Unofficial [🤗 huggingface/diffusers](https://github.com/huggingface/diffusers)-based implementation of Paint-with-Words proposed by the paper *eDiff-I: Text-to-Image Diffusion Models with an Ensemble of Expert Denoisers*. 
+This implementation is based on [cloneofsimo/paint-with-words-sd](https://github.com/cloneofsimo/paint-with-words-sd).
 
 ## Subtle Control of the Image Generation
 
@@ -51,12 +58,10 @@ Their paper and their method was not open-sourced. Yet, paint-with-words can be 
 # Installation
 
 ```bash
-pip install git+https://github.com/cloneofsimo/paint-with-words-sd.git
+pip install git+https://github.com/shunk031/paint-with-words-pipeline
 ```
 
 # Basic Usage
-
-Before running, fill in the variable `HF_TOKEN` in `.env` file with Huggingface token for Stable Diffusion, and load_dotenv().
 
 Prepare segmentation map, and map-color : tag label such as below. keys are (R, G, B) format, and values are tag label.
 
@@ -73,11 +78,8 @@ Prepare segmentation map, and map-color : tag label such as below. keys are (R, 
 You neeed to have them so that they are in format "{label},{strength}", where strength is additional weight of the attention score you will give during generation, i.e., it will have more effect.
 
 ```python
-
-import dotenv
-from PIL import Image
-
-from paint_with_words import paint_with_words
+import torch
+from paint_with_words.pipelines import PaintWithWordsPipeline
 
 settings = {
     "color_context": {
@@ -92,27 +94,33 @@ settings = {
     "output_img_path": "contents/output_cat_dog.png",
 }
 
-
-dotenv.load_dotenv()
-
 color_map_image = Image.open(settings["color_map_img_path"]).convert("RGB")
 color_context = settings["color_context"]
 input_prompt = settings["input_prompt"]
 
-img = paint_with_words(
-    color_context=color_context,
-    color_map_image=color_map_image,
-    input_prompt=input_prompt,
-    num_inference_steps=30,
-    guidance_scale=7.5,
-    device="cuda:0",
+# load pre-trained weight with paint with words pipeline
+pipe = PaintWithWordsPipeline.from_pretrained(
+    model_name,
+    revision="fp16",
+    torch_dtype=torch.float16,
 )
+pipe.safety_checker = None  # disable the safety checker
+pipe.to("cuda")
+
+# load color map image
+color_map_image = Image.open(color_map_image_path).convert("RGB")
+
+with torch.autocast("cuda"):
+    image = pipe(
+        prompt=input_prompt,
+        color_context=color_context,
+        color_map_image=color_map_image,
+        latents=latents,
+        num_inference_steps=30,
+    ).images[0]
 
 img.save(settings["output_img_path"])
-
 ```
-
-There is minimal working example in `runner.py` that is self contained. Please have a look!
 
 ---
 
@@ -149,18 +157,21 @@ You can define your own weight function and further tweak the configurations by 
 Example:
 
 ```python
-w_f = lambda w, sigma, qk: 0.4 * w * math.log(sigma**2 + 1) * qk.std()
+def weight_function(w: torch.Tensor, sigma: torch.Tensor, qk: torch.Tensor) -> torch.Tensor:
+    return 0.4 * w * math.log(sigma ** 2 + 1) * qk.std()
 
-img = paint_with_words(
-    color_context=color_context,
-    color_map_image=color_map_image,
-    input_prompt=input_prompt,
-    num_inference_steps=20,
-    guidance_scale=7.5,
-    device="cuda:0",
-    preloaded_utils=loaded,
-    weight_function=w_f
-)
+with torch.autocast("cuda"):
+    image = pipe(
+        prompt=input_prompt,
+        color_context=color_context,
+        color_map_image=color_map_image,
+        latents=latents,
+        num_inference_steps=30,
+        #
+        # set the weight function here:
+        weight_function=weight_function,
+        #
+    ).images[0]
 ```
 
 ## More on the weight function, (but higher)
@@ -189,38 +200,6 @@ img = paint_with_words(
 
 > $w' = w \log (1 + \sigma^2)  std (Q^T K)$
 
-# Using other Fine-tuned models
-
-If you are from Automatic1111 community, you maybe used to using native LDM checkpoint formats, not diffuser-checkpoint format. Luckily, there is a quick script that allows conversion.
-[this](https://github.com/huggingface/diffusers/blob/main/scripts/convert_original_stable_diffusion_to_diffusers.py).
-
-```bash
-python change_model_path.py --checkpoint_path custom_model.ckpt --scheduler_type ddim --dump_path custom_model_diffusion_format
-```
-
-Now, use the converted model in `paint_with_words` function.
-
-```python
-from paint_with_words import paint_with_words, pww_load_tools
-
-loaded = pww_load_tools(
-    "cuda:0",
-    scheduler_type=LMSDiscreteScheduler,
-    local_model_path="./custom_model_diffusion_format"
-)
-#...
-img = paint_with_words(
-    color_context=color_context,
-    color_map_image=color_map_image,
-    input_prompt=input_prompt,
-    num_inference_steps=30,
-    guidance_scale=7.5,
-    device="cuda:0",
-    weight_function=lambda w, sigma, qk: 0.4 * w * math.log(1 + sigma) * qk.max(),
-    preloaded_utils=loaded
-)
-```
-
 # Example Notebooks
 
 You can view the minimal working notebook [here](./contents/notebooks/paint_with_words.ipynb) or [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1MZfGaY3aQQn5_T-6bkXFE1rI59A2nJlU?usp=sharing)
@@ -231,19 +210,7 @@ You can view the minimal working notebook [here](./contents/notebooks/paint_with
 
 ---
 
-# TODO
+# Acknowledgements
 
-- [ ] Make extensive comparisons for different weight scaling functions.
-- [ ] Create word latent-based cross-attention generations.
-- [ ] Check if statement "making background weight smaller is better" is justifiable, by using some standard metrics
-- [ ] Create AUTOMATIC1111's interface
-- [ ] Create Gradio interface
-- [x] Create tutorial
-- [ ] See if starting with some "known image latent" is helpful. If it is, we might as well hard-code some initial latent.
-- [ ] Region based seeding, where we set seed for each regions. Can be simply implemented with extra argument in `COLOR_CONTEXT`
-- [ ] sentence wise text seperation. Currently token is the smallest unit that influences cross-attention. This needs to be fixed. (Can be done pretty trivially)
-- [x] Allow different models to be used. use [this](https://github.com/huggingface/diffusers/blob/main/scripts/convert_original_stable_diffusion_to_diffusers.py).
-- [ ] "negative region", where we can set some region to "not" have some semantics. can be done with classifier-free guidance.
-- [x] Img2ImgPaintWithWords -> Img2Img, but with extra text segmentation map for better control
-- [ ] InpaintPaintwithWords -> inpaint, but with extra text segmentation map for better control
-- [x] Support for other schedulers
+- Balaji, Yogesh, et al. "ediffi: Text-to-image diffusion models with an ensemble of expert denoisers." [arXiv preprint arXiv:2211.01324](https://arxiv.org/abs/2211.01324) (2022).
+- cloneofsimo/paint-with-words-sd: Implementation of Paint-with-words with Stable Diffusion : method from eDiff-I that let you generate image from text-labeled segmentation map. https://github.com/cloneofsimo/paint-with-words-sd 
