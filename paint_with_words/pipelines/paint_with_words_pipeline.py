@@ -1,6 +1,8 @@
+import logging
 from dataclasses import dataclass
-from typing import List, Union
+from typing import Dict, List, Union
 
+import numpy as np
 import torch as th
 from diffusers.models import AutoencoderKL, UNet2DConditionModel
 from diffusers.pipelines.stable_diffusion import (
@@ -15,9 +17,13 @@ from diffusers.schedulers import (
     LMSDiscreteScheduler,
     PNDMScheduler,
 )
+from PIL.Image import Image as PilImage
 from transformers import CLIPFeatureExtractor, CLIPTextModel, CLIPTokenizer
 
+from paint_with_words.helper.aliases import RGB
 from paint_with_words.models.attention import paint_with_words_forward
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -71,45 +77,66 @@ class PaintWithWordsPipeline(StableDiffusionPipeline):
             if m.__class__.__name__ == cross_attention_name:
                 m.__class__.__call__ = paint_with_words_forward
 
-    def _image_context_seperator(
-        img: Image.Image, color_context: dict, _tokenizer
-    ) -> List[Tuple[List[int], torch.Tensor]]:
+    def separate_image_context(self, img: PilImage, color_context: Dict[RGB, str]):
 
-        ret_lists = []
+        assert img.width % 32 == 0 and img.height % 32 == 0, img.size
 
-        if img is not None:
-            w, h = img.size
-            w, h = map(lambda x: x - x % 32, (w, h))  # resize to integer multiple of 32
-            img = img.resize((w, h), resample=PIL.Image.LANCZOS)
+        separated_image_and_context: List[SeparatedImageContext] = []
 
-            for color, v in color_context.items():
-                f = v.split(",")[-1]
-                v = ",".join(v.split(",")[:-1])
-                f = float(f)
-                v_input = _tokenizer(
-                    v,
-                    max_length=_tokenizer.model_max_length,
-                    truncation=True,
+        for rgb_color, word_with_weight in color_context.items():
+
+            # e.g.,
+            # rgb_color: (0, 0, 0)
+            # word_with_weight: cat,1.0
+
+            # cat,1.0 -> ["cat", "1.0"]
+            word_and_weight = word_with_weight.split(",")
+            # ["cat", "1.0"] -> 1.0
+            word_weight = float(word_and_weight[-1])
+            # ["cat", "1.0"] -> cat
+            word = ",".join(word_and_weight[:-1])
+
+            logger.info(
+                f"input = {word_with_weight}; word = {word}; weight = {word_weight}"
+            )
+
+            word_input = self.tokenizer(
+                word,
+                max_length=self.tokenizer.model_max_length,
+                truncation=True,
+                add_special_tokens=False,
+            )
+            word_as_tokens = word_input["input_ids"]
+
+            img_where_color_np = (np.array(img) == rgb_color).all(axis=-1)
+            if not img_where_color_np.sum() > 0:
+                logger.warning(
+                    f"Warning : not a single color {rgb_color} not found in image"
                 )
-                v_as_tokens = v_input["input_ids"][1:-1]
-                if isinstance(color, str):
-                    r, g, b = color[1:3], color[3:5], color[5:7]
-                    color = (int(r, 16), int(g, 16), int(b, 16))
 
-                img_where_color = (np.array(img) == color).all(axis=-1)
+            img_where_color_th = th.tensor(
+                img_where_color_np,
+                dtype=th.float32,
+                device=self.device,
+            )
+            img_where_color_th = img_where_color_th * word_weight
 
-                if not img_where_color.sum() > 0:
-                    print(f"Warning : not a single color {color} not found in image")
+            image_context = SeparatedImageContext(
+                word=word,
+                token_ids=word_as_tokens,
+                color_map_th=img_where_color_th,
+            )
+            separated_image_and_context.append(image_context)
 
-                img_where_color = torch.tensor(img_where_color, dtype=torch.float32) * f
+        if len(separated_image_and_context) == 0:
+            image_context = SeparatedImageContext(
+                word="",
+                token_ids=[-1],
+                color_map_th=th.zeros((img.width, img.height), dtype=th.float32),
+            )
+            separated_image_and_context.append(image_context)
 
-                ret_lists.append((v_as_tokens, img_where_color))
-        else:
-            w, h = 512, 512
-
-        if len(ret_lists) == 0:
-            ret_lists.append(([-1], torch.zeros((w, h), dtype=torch.float32)))
-        return ret_lists, w, h
+        return separated_image_and_context
 
     def _tokens_img_attention_weight(
         img_context_seperated, tokenized_texts, ratio: int = 8
