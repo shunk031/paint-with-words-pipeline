@@ -1,4 +1,4 @@
-# Paint-with-Words, Implemented with Stable diffusion using Diffuers pipeline
+# Paint-with-Words, Implemented with [Stable diffusion](https://github.com/CompVis/stable-diffusion) using [Diffuers pipeline](https://github.com/huggingface/diffusers)
 
 [![CoRR preprint arXiv:2211.01324](http://img.shields.io/badge/cs.CL-arXiv%3A2211.01324-B31B1B.svg)](https://arxiv.org/abs/2211.01324)
 [![CI](https://github.com/shunk031/paint-with-words-pipeline/actions/workflows/ci.yaml/badge.svg)](https://github.com/shunk031/paint-with-words-pipeline/actions/workflows/ci.yaml)
@@ -94,7 +94,7 @@ settings = {
     "output_img_path": "contents/output_cat_dog.png",
 }
 
-color_map_image = Image.open(settings["color_map_img_path"]).convert("RGB")
+color_map_image_path = settings["color_map_img_path"]
 color_context = settings["color_context"]
 input_prompt = settings["input_prompt"]
 
@@ -152,12 +152,16 @@ In the paper, they used $w \log (1 + \sigma)  \max (Q^T K)$ to scale appropriate
 
 > $w' = w \log (1 + \sigma^2)  std (Q^T K)$
 
-You can define your own weight function and further tweak the configurations by defining `weight_function` argument in `paint_with_words`.
+You can define your own weight function and further tweak the configurations by defining `weight_function` argument in the `PaintWithWordsPipeline`.
 
 Example:
 
 ```python
-def weight_function(w: torch.Tensor, sigma: torch.Tensor, qk: torch.Tensor) -> torch.Tensor:
+def weight_function(
+    w: torch.Tensor, 
+    sigma: torch.Tensor, 
+    qk: torch.Tensor,
+) -> torch.Tensor:
     return 0.4 * w * math.log(sigma ** 2 + 1) * qk.std()
 
 with torch.autocast("cuda"):
