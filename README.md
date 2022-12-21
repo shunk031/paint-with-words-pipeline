@@ -1,8 +1,10 @@
-# Paint-with-Words, Implemented with [Stable diffusion](https://github.com/CompVis/stable-diffusion) using [Diffuers pipeline](https://github.com/huggingface/diffusers)
+# [Paint-with-Words](https://arxiv.org/abs/2211.01324), Implemented with [Stable diffusion](https://github.com/CompVis/stable-diffusion) using [Diffuers pipeline](https://github.com/huggingface/diffusers)
 
 [![CoRR preprint arXiv:2211.01324](http://img.shields.io/badge/cs.CL-arXiv%3A2211.01324-B31B1B.svg)](https://arxiv.org/abs/2211.01324)
 [![CI](https://github.com/shunk031/paint-with-words-pipeline/actions/workflows/ci.yaml/badge.svg)](https://github.com/shunk031/paint-with-words-pipeline/actions/workflows/ci.yaml)
+[![Release](https://github.com/shunk031/paint-with-words-pipeline/actions/workflows/deploy_and_release.yaml/badge.svg)](https://github.com/shunk031/paint-with-words-pipeline/actions/workflows/deploy_and_release.yaml)
 ![Python](https://img.shields.io/badge/python-3.8%20%7C%203.9%20%7C%203.10-blue?logo=python)
+[![PyPI](https://img.shields.io/pypi/v/paint-with-words-pipeline.svg)](https://pypi.python.org/pypi/paint-with-words-pipeline)
 
 Unofficial [🤗 huggingface/diffusers](https://github.com/huggingface/diffusers)-based implementation of Paint-with-Words proposed by the paper *eDiff-I: Text-to-Image Diffusion Models with an Ensemble of Expert Denoisers*. 
 This implementation is based on [cloneofsimo/paint-with-words-sd](https://github.com/cloneofsimo/paint-with-words-sd).
@@ -58,7 +60,7 @@ Their paper and their method was not open-sourced. Yet, paint-with-words can be 
 # Installation
 
 ```bash
-pip install git+https://github.com/shunk031/paint-with-words-pipeline
+pip install paint-with-words-pipeline
 ```
 
 # Basic Usage
