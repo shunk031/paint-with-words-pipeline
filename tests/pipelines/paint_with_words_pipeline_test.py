@@ -243,3 +243,44 @@ def test_calculate_tokens_image_attention_weight(
         int((w * 1 / 64) * (h * 1 / 64)),
         pipe.tokenizer.model_max_length,
     )
+
+
+def test_batch_pipeline(model_name: str):
+
+    # load pre-trained weight with paint with words pipeline
+    pipe = PaintWithWordsPipeline.from_pretrained(
+        model_name,
+        revision="fp16",
+        torch_dtype=torch.float16,
+    )
+    pipe.safety_checker = None  # disable the safety checker
+    pipe.to(gpu_device)
+
+    # check the scheduler is LMSDiscreteScheduler
+    assert isinstance(pipe.scheduler, LMSDiscreteScheduler), type(pipe.scheduler)
+
+    # generate latents with seed-fixed generator
+    generator = torch.manual_seed(0)
+    latents = torch.randn((1, 4, 64, 64), generator=generator)
+    latents = latents.repeat(2, 1, 1, 1)  # shape: (1, 4, 64, 64) -> (2, 4, 64, 64)
+
+    color_map_image_1 = EXAMPLE_SETTING_1["color_map_image_path"]
+    color_map_image_2 = EXAMPLE_SETTING_2["color_map_image_path"]
+
+    with th.autocast("cuda"):
+        images = pipe(
+            prompt=[
+                EXAMPLE_SETTING_1["input_prompt"],
+                EXAMPLE_SETTING_1["input_prompt"],
+            ],
+            color_context=[
+                EXAMPLE_SETTING_1["color_context"],
+                EXAMPLE_SETTING_2["color_context"],
+            ],
+            color_map_image=[
+                color_map_image_1,
+                color_map_image_2,
+            ],
+            latents=latents,
+            num_inference_steps=30,
+        )

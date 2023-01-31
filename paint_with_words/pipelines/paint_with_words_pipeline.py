@@ -1,9 +1,6 @@
 import logging
-import os
-from dataclasses import dataclass
 from typing import Callable, Dict, List, Optional, Union
 
-import numpy as np
 import torch as th
 from diffusers.models import AutoencoderKL, UNet2DConditionModel
 from diffusers.pipelines.stable_diffusion import (
@@ -19,17 +16,18 @@ from diffusers.schedulers import (
     LMSDiscreteScheduler,
     PNDMScheduler,
 )
-from PIL import Image
 from PIL.Image import Image as PilImage
 from transformers import CLIPFeatureExtractor, CLIPTextModel, CLIPTokenizer
 
-from paint_with_words.helper.aliases import RGB
+from paint_with_words.helper.aliases import RGB, ColorContext, SeparatedImageContext
+from paint_with_words.helper.attention import replace_cross_attention
 from paint_with_words.helper.images import (
-    flatten_image_importance,
+    calculate_tokens_image_attention_weight,
     get_resize_size,
+    load_image,
     resize_image,
+    separate_image_context,
 )
-from paint_with_words.models.attention import paint_with_words_forward
 from paint_with_words.weight_functions import (
     PaintWithWordsWeightFunction,
     UnconditionedWeightFunction,
@@ -37,13 +35,6 @@ from paint_with_words.weight_functions import (
 )
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class SeparatedImageContext(object):
-    word: str
-    token_ids: List[int]
-    color_map_th: th.Tensor
 
 
 class PaintWithWordsPipeline(StableDiffusionPipeline):
@@ -86,71 +77,20 @@ class PaintWithWordsPipeline(StableDiffusionPipeline):
     def replace_cross_attention(
         self, cross_attention_name: str = "CrossAttention"
     ) -> None:
+        replace_cross_attention(
+            unet=self.unet,
+            cross_attention_name=cross_attention_name,
+        )
 
-        for m in self.unet.modules():
-            if m.__class__.__name__ == cross_attention_name:
-                m.__class__.__call__ = paint_with_words_forward
-
-    def separate_image_context(self, img: PilImage, color_context: Dict[RGB, str]):
-
-        assert img.width % 32 == 0 and img.height % 32 == 0, img.size
-
-        separated_image_and_context: List[SeparatedImageContext] = []
-
-        for rgb_color, word_with_weight in color_context.items():
-
-            # e.g.,
-            # rgb_color: (0, 0, 0)
-            # word_with_weight: cat,1.0
-
-            # cat,1.0 -> ["cat", "1.0"]
-            word_and_weight = word_with_weight.split(",")
-            # ["cat", "1.0"] -> 1.0
-            word_weight = float(word_and_weight[-1])
-            # ["cat", "1.0"] -> cat
-            word = ",".join(word_and_weight[:-1])
-
-            logger.info(
-                f"input = {word_with_weight}; word = {word}; weight = {word_weight}"
-            )
-
-            word_input = self.tokenizer(
-                word,
-                max_length=self.tokenizer.model_max_length,
-                truncation=True,
-                add_special_tokens=False,
-            )
-            word_as_tokens = word_input["input_ids"]
-
-            img_where_color_np = (np.array(img) == rgb_color).all(axis=-1)
-            if not img_where_color_np.sum() > 0:
-                logger.warning(
-                    f"Warning : not a single color {rgb_color} not found in image"
-                )
-
-            img_where_color_th = th.tensor(
-                img_where_color_np,
-                dtype=th.float32,
-                device=self.device,
-            )
-            img_where_color_th = img_where_color_th * word_weight
-
-            image_context = SeparatedImageContext(
-                word=word,
-                token_ids=word_as_tokens,
-                color_map_th=img_where_color_th,
-            )
-            separated_image_and_context.append(image_context)
-
-        if len(separated_image_and_context) == 0:
-            image_context = SeparatedImageContext(
-                word="",
-                token_ids=[-1],
-                color_map_th=th.zeros((img.width, img.height), dtype=th.float32),
-            )
-            separated_image_and_context.append(image_context)
-
-        return separated_image_and_context
+    def separate_image_context(
+        self, img: PilImage, color_context: ColorContext
+    ) -> List[SeparatedImageContext]:
+        return separate_image_context(
+            tokenizer=self.tokenizer,
+            img=img,
+            color_context=color_context,
+            device=self.device,
+        )
 
     def calculate_tokens_image_attention_weight(
         self,
@@ -159,65 +99,20 @@ class PaintWithWordsPipeline(StableDiffusionPipeline):
         ratio: int,
     ) -> th.Tensor:
 
-        prompt_token_ids = self.tokenizer(
-            input_prompt,
-            padding="max_length",
-            max_length=self.tokenizer.model_max_length,
-            truncation=True,
-        ).input_ids
-
-        w, h = separated_image_context_list[0].color_map_th.shape
-        w_r, h_r = w // ratio, h // ratio
-
-        ret_tensor = th.zeros(
-            (w_r * h_r, len(prompt_token_ids)), dtype=th.float32, device=self.device
+        return calculate_tokens_image_attention_weight(
+            tokenizer=self.tokenizer,
+            input_prompt=input_prompt,
+            separated_image_context_list=separated_image_context_list,
+            ratio=ratio,
+            device=self.device,
         )
-
-        for separated_image_context in separated_image_context_list:
-            is_in = False
-            context_token_ids = separated_image_context.token_ids
-            context_image_map = separated_image_context.color_map_th
-
-            for i, token_id in enumerate(prompt_token_ids):
-                if (
-                    prompt_token_ids[i : i + len(context_token_ids)]
-                    == context_token_ids
-                ):
-                    is_in = True
-
-                    # shape: (w * 1/ratio, h * 1/ratio)
-                    img_importance = flatten_image_importance(
-                        img_th=context_image_map, ratio=ratio
-                    )
-                    # shape: ((w * 1/ratio) * (h * 1/ratio), 1)
-                    img_importance = img_importance.view(-1, 1)
-                    # shape: ((w * 1/ratio) * (h * 1/ratio), len(context_token_ids))
-                    img_importance = img_importance.repeat(1, len(context_token_ids))
-
-                    ret_tensor[:, i : i + len(context_token_ids)] += img_importance
-
-            if not is_in:
-                logger.warning(
-                    f"Warning ratio {ratio} : tokens {context_token_ids} not found in text"
-                )
-
-        return ret_tensor
-
-    def load_image(self, image: Union[str, os.PathLike, PilImage]) -> PilImage:
-        if isinstance(image, str) or isinstance(image, os.PathLike):
-            image = Image.open(image)
-
-        if image.mode != "RGB":
-            image = image.convert("RGB")
-
-        return image
 
     @th.no_grad()
     def __call__(
         self,
-        prompt: str,
-        color_context: Dict[RGB, str],
-        color_map_image: PilImage,
+        prompts: Union[str, List[str]],
+        color_contexts: Union[ColorContext, List[ColorContext]],
+        color_map_images: Union[PilImage, List[PilImage]],
         weight_function: WeightFunction = PaintWithWordsWeightFunction(),
         num_inference_steps: int = 50,
         guidance_scale: float = 7.5,
@@ -232,46 +127,55 @@ class PaintWithWordsPipeline(StableDiffusionPipeline):
         callback_steps: Optional[int] = 1,
     ) -> StableDiffusionPipelineOutput:
 
-        assert isinstance(prompt, str), type(prompt)
+        if not isinstance(prompts, list):
+            prompts = [prompts]
+        if not isinstance(color_contexts, list):
+            color_contexts = [color_contexts]
+        if not isinstance(color_map_images, list):
+            color_map_images = [color_map_images]
+
         assert guidance_scale > 1.0, guidance_scale
 
         # 0. Default height and width to unet and resize the color map image
-        color_map_image = self.load_image(image=color_map_image)
-        width, height = get_resize_size(img=color_map_image)
-        color_map_image = resize_image(img=color_map_image, w=width, h=height)
+        color_map_images = [load_image(image=image) for image in color_map_images]
+        sizes = [get_resize_size(img=img) for img in color_map_images]
+        color_map_images = [
+            resize_image(img=img, w=w, h=h)
+            for img, (w, h) in zip(color_map_images, sizes)
+        ]
 
         separated_image_context_list = self.separate_image_context(
-            img=color_map_image, color_context=color_context
+            img=color_map_images, color_context=color_contexts
         )
         cross_attention_weight_8 = self.calculate_tokens_image_attention_weight(
-            input_prompt=prompt,
+            input_prompt=prompts,
             separated_image_context_list=separated_image_context_list,
             ratio=8,
         )
 
         cross_attention_weight_16 = self.calculate_tokens_image_attention_weight(
-            input_prompt=prompt,
+            input_prompt=prompts,
             separated_image_context_list=separated_image_context_list,
             ratio=16,
         )
 
         cross_attention_weight_32 = self.calculate_tokens_image_attention_weight(
-            input_prompt=prompt,
+            input_prompt=prompts,
             separated_image_context_list=separated_image_context_list,
             ratio=32,
         )
 
         cross_attention_weight_64 = self.calculate_tokens_image_attention_weight(
-            input_prompt=prompt,
+            input_prompt=prompts,
             separated_image_context_list=separated_image_context_list,
             ratio=64,
         )
 
         # 1. Check inputs. Raise error if not correct
-        self.check_inputs(prompt, height, width, callback_steps)
+        self.check_inputs(prompts, height, width, callback_steps)
 
         # 2. Define call parameters
-        batch_size = 1 if isinstance(prompt, str) else len(prompt)
+        batch_size = 1 if isinstance(prompts, str) else len(prompts)
         device = self._execution_device
         # here `guidance_scale` is defined analog to the guidance weight `w` of equation (2)
         # of the Imagen paper: https://arxiv.org/pdf/2205.11487.pdf . `guidance_scale = 1`
@@ -280,7 +184,7 @@ class PaintWithWordsPipeline(StableDiffusionPipeline):
 
         # 3. Encode input prompt
         text_embeddings = self._encode_prompt(
-            prompt,
+            prompts,
             device,
             num_images_per_prompt,
             do_classifier_free_guidance,
