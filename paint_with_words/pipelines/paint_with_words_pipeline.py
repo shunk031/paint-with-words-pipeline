@@ -201,6 +201,10 @@ class PaintWithWordsPipeline(StableDiffusionPipeline):
                     f"Warning ratio {ratio} : tokens {context_token_ids} not found in text"
                 )
 
+        # add dimension for the batch
+        # shape: (w_r * h_r, len(prompt_token_ids)) -> (1, w_r * h_r, len(prompt_token_ids))
+        ret_tensor = ret_tensor.unsqueeze(dim=0)
+
         return ret_tensor
 
     def load_image(self, image: Union[str, os.PathLike, PilImage]) -> PilImage:
