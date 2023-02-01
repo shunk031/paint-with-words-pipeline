@@ -103,7 +103,6 @@ def separate_image_context(
         )
         img_where_color_th = img_where_color_th * word_weight
 
-        breakpoint()
         image_context = SeparatedImageContext(
             word=word,
             token_ids=word_as_tokens,
