@@ -1,4 +1,5 @@
 import logging
+import os
 from typing import Callable, Dict, List, Optional, Union
 
 import torch as th
@@ -107,13 +108,91 @@ class PaintWithWordsPipeline(StableDiffusionPipeline):
             device=self.device,
         )
 
+    def calculate_cross_attention_weight(
+        self,
+        prompt: str,
+        color_map_image: Union[str, os.PathLike, PilImage],
+        color_context: ColorContext,
+    ):
+
+        # 0. Default height and width to unet and resize the color map image
+        color_map_image = load_image(image=color_map_image)
+        width, height = get_resize_size(img=color_map_image)
+        assert width == 512 and height == 512
+        color_map_image = resize_image(img=color_map_image, w=width, h=height)
+
+        separated_image_context_list = self.separate_image_context(
+            img=color_map_image, color_context=color_context
+        )
+
+        cross_attention_weight_8 = self.calculate_tokens_image_attention_weight(
+            input_prompt=prompt,
+            separated_image_context_list=separated_image_context_list,
+            ratio=8,
+        )
+
+        cross_attention_weight_16 = self.calculate_tokens_image_attention_weight(
+            input_prompt=prompt,
+            separated_image_context_list=separated_image_context_list,
+            ratio=16,
+        )
+
+        cross_attention_weight_32 = self.calculate_tokens_image_attention_weight(
+            input_prompt=prompt,
+            separated_image_context_list=separated_image_context_list,
+            ratio=32,
+        )
+
+        cross_attention_weight_64 = self.calculate_tokens_image_attention_weight(
+            input_prompt=prompt,
+            separated_image_context_list=separated_image_context_list,
+            ratio=64,
+        )
+
+        breakpoint()
+
+        return {
+            f"cross_attention_weight_{height * width // (8*8)}": cross_attention_weight_8,
+            f"cross_attention_weight_{height * width // (16*16)}": cross_attention_weight_16,
+            f"cross_attention_weight_{height * width // (32*32)}": cross_attention_weight_32,
+            f"cross_attention_weight_{height * width // (64*64)}": cross_attention_weight_64,
+        }
+
+    def batch_calculate_cross_attention_weight(
+        self,
+        prompts: List[str],
+        color_map_images: Union[List[str], List[os.PathLike], List[PilImage]],
+        color_contexts: List[ColorContext],
+    ):
+        assert len(prompts) == len(color_map_images) == len(color_contexts)
+        it = zip(prompts, color_map_images, color_contexts)
+
+        cross_attention_weight_dict = {}
+
+        for i, (prompt, color_map_image, color_context) in enumerate(it):
+            output_dict = self.calculate_cross_attention_weight(
+                prompt=prompt,
+                color_map_image=color_map_image,
+                color_context=color_context,
+            )
+            if i == 0:
+                cross_attention_weight_dict.update(output_dict)
+            else:
+                breakpoint()
+
+        return cross_attention_weight_dict
+
     @th.no_grad()
     def __call__(
         self,
         prompts: Union[str, List[str]],
         color_contexts: Union[ColorContext, List[ColorContext]],
-        color_map_images: Union[PilImage, List[PilImage]],
+        color_map_images: Union[
+            PilImage, List[PilImage], str, List[str], os.PathLike, List[os.PathLike]
+        ],
         weight_function: WeightFunction = PaintWithWordsWeightFunction(),
+        height: int = 512,
+        width: int = 512,
         num_inference_steps: int = 50,
         guidance_scale: float = 7.5,
         negative_prompt: Optional[Union[str, List[str]]] = None,
@@ -136,41 +215,6 @@ class PaintWithWordsPipeline(StableDiffusionPipeline):
 
         assert guidance_scale > 1.0, guidance_scale
 
-        # 0. Default height and width to unet and resize the color map image
-        color_map_images = [load_image(image=image) for image in color_map_images]
-        sizes = [get_resize_size(img=img) for img in color_map_images]
-        color_map_images = [
-            resize_image(img=img, w=w, h=h)
-            for img, (w, h) in zip(color_map_images, sizes)
-        ]
-
-        separated_image_context_list = self.separate_image_context(
-            img=color_map_images, color_context=color_contexts
-        )
-        cross_attention_weight_8 = self.calculate_tokens_image_attention_weight(
-            input_prompt=prompts,
-            separated_image_context_list=separated_image_context_list,
-            ratio=8,
-        )
-
-        cross_attention_weight_16 = self.calculate_tokens_image_attention_weight(
-            input_prompt=prompts,
-            separated_image_context_list=separated_image_context_list,
-            ratio=16,
-        )
-
-        cross_attention_weight_32 = self.calculate_tokens_image_attention_weight(
-            input_prompt=prompts,
-            separated_image_context_list=separated_image_context_list,
-            ratio=32,
-        )
-
-        cross_attention_weight_64 = self.calculate_tokens_image_attention_weight(
-            input_prompt=prompts,
-            separated_image_context_list=separated_image_context_list,
-            ratio=64,
-        )
-
         # 1. Check inputs. Raise error if not correct
         self.check_inputs(prompts, height, width, callback_steps)
 
@@ -191,8 +235,11 @@ class PaintWithWordsPipeline(StableDiffusionPipeline):
             negative_prompt,
         )
         # Ensure classifier free guidance is performed and
-        # the batch size of the text embedding is 2 (conditional + unconditional)
-        assert do_classifier_free_guidance and text_embeddings.size(dim=0) == 2
+        # the batch size of the text embedding is batch_size * 2 (conditional + unconditional)
+        assert (
+            do_classifier_free_guidance
+            and text_embeddings.size(dim=0) == batch_size * 2
+        )
         uncond_embeddings, cond_embeddings = text_embeddings.chunk(2)
 
         # 4. Prepare timesteps
@@ -215,6 +262,12 @@ class PaintWithWordsPipeline(StableDiffusionPipeline):
         # 6. Prepare extra step kwargs. TODO: Logic should ideally just be moved out of the pipeline
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
 
+        cross_attention_weights = self.batch_calculate_cross_attention_weight(
+            prompts=prompts,
+            color_map_images=color_map_images,
+            color_contexts=color_contexts,
+        )
+
         num_warmup_steps = len(timesteps) - num_inference_steps * self.scheduler.order
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
@@ -231,19 +284,27 @@ class PaintWithWordsPipeline(StableDiffusionPipeline):
                     width // self.vae_scale_factor,
                 )
 
+                encoder_hidden_states = {
+                    "context_tensor": cond_embeddings,
+                    "sigma": sigma,
+                    "weight_function": weight_function,
+                }
+                encoder_hidden_states.update(cross_attention_weights)
+
                 # predict the noise residual
                 noise_pred_text = self.unet(
                     latent_model_input,
                     t,
-                    encoder_hidden_states={
-                        "context_tensor": cond_embeddings,
-                        f"cross_attention_weight_{height * width // (8*8)}": cross_attention_weight_8,
-                        f"cross_attention_weight_{height * width // (16*16)}": cross_attention_weight_16,
-                        f"cross_attention_weight_{height * width // (32*32)}": cross_attention_weight_32,
-                        f"cross_attention_weight_{height * width // (64*64)}": cross_attention_weight_64,
-                        "sigma": sigma,
-                        "weight_function": weight_function,
-                    },
+                    # encoder_hidden_states={
+                    #     "context_tensor": cond_embeddings,
+                    #     f"cross_attention_weight_{height * width // (8*8)}": cross_attention_weight_8,
+                    #     f"cross_attention_weight_{height * width // (16*16)}": cross_attention_weight_16,
+                    #     f"cross_attention_weight_{height * width // (32*32)}": cross_attention_weight_32,
+                    #     f"cross_attention_weight_{height * width // (64*64)}": cross_attention_weight_64,
+                    #     "sigma": sigma,
+                    #     "weight_function": weight_function,
+                    # },
+                    encoder_hidden_states=encoder_hidden_states,
                 ).sample
 
                 latent_model_input = self.scheduler.scale_model_input(latents, t)
