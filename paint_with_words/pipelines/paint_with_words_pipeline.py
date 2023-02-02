@@ -20,7 +20,7 @@ from diffusers.schedulers import (
 from PIL.Image import Image as PilImage
 from transformers import CLIPFeatureExtractor, CLIPTextModel, CLIPTokenizer
 
-from paint_with_words.helper.aliases import RGB, ColorContext, SeparatedImageContext
+from paint_with_words.helper.aliases import ColorContext, SeparatedImageContext
 from paint_with_words.helper.attention import replace_cross_attention
 from paint_with_words.helper.images import (
     calculate_tokens_image_attention_weight,
@@ -147,8 +147,6 @@ class PaintWithWordsPipeline(StableDiffusionPipeline):
             ratio=64,
         )
 
-        breakpoint()
-
         return {
             f"cross_attention_weight_{height * width // (8*8)}": cross_attention_weight_8,
             f"cross_attention_weight_{height * width // (16*16)}": cross_attention_weight_16,
@@ -176,7 +174,19 @@ class PaintWithWordsPipeline(StableDiffusionPipeline):
             if i == 0:
                 cross_attention_weight_dict.update(output_dict)
             else:
-                breakpoint()
+                for weight_key in output_dict.keys():
+                    tensor_tuple = (
+                        cross_attention_weight_dict[weight_key],
+                        output_dict[weight_key],
+                    )
+                    cross_attention_weight_dict[weight_key] = th.cat(
+                        tensor_tuple, dim=0
+                    )
+
+        for w_k, w_v in cross_attention_weight_dict.items():
+            assert w_v.size(dim=0) == len(
+                prompts
+            ), f"Invalid batch dim at {w_k}: {w_v.size(dim=0)} != {len(prompts)}"
 
         return cross_attention_weight_dict
 
@@ -259,6 +269,7 @@ class PaintWithWordsPipeline(StableDiffusionPipeline):
         # 6. Prepare extra step kwargs. TODO: Logic should ideally just be moved out of the pipeline
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
 
+        # 7. Calculate weights for the cross attention
         cross_attention_weights = self.batch_calculate_cross_attention_weight(
             prompts=prompts,
             color_map_images=color_map_images,
@@ -274,7 +285,7 @@ class PaintWithWordsPipeline(StableDiffusionPipeline):
 
                 latent_model_input = self.scheduler.scale_model_input(latents, t)
                 assert latent_model_input.size() == (
-                    1,
+                    batch_size,
                     num_channels_latents,
                     height // self.vae_scale_factor,
                     width // self.vae_scale_factor,
@@ -289,25 +300,16 @@ class PaintWithWordsPipeline(StableDiffusionPipeline):
 
                 # predict the noise residual
                 noise_pred_text = self.unet(
-                    latent_model_input,
-                    t,
-                    # encoder_hidden_states={
-                    #     "context_tensor": cond_embeddings,
-                    #     f"cross_attention_weight_{height * width // (8*8)}": cross_attention_weight_8,
-                    #     f"cross_attention_weight_{height * width // (16*16)}": cross_attention_weight_16,
-                    #     f"cross_attention_weight_{height * width // (32*32)}": cross_attention_weight_32,
-                    #     f"cross_attention_weight_{height * width // (64*64)}": cross_attention_weight_64,
-                    #     "sigma": sigma,
-                    #     "weight_function": weight_function,
-                    # },
+                    sample=latent_model_input,
+                    timestep=t,
                     encoder_hidden_states=encoder_hidden_states,
                 ).sample
 
                 latent_model_input = self.scheduler.scale_model_input(latents, t)
 
                 noise_pred_uncond = self.unet(
-                    latent_model_input,
-                    t,
+                    sample=latent_model_input,
+                    timestep=t,
                     encoder_hidden_states={
                         "context_tensor": uncond_embeddings,
                         f"cross_attention_weight_{height * width // (8*8)}": 0.0,
