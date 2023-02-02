@@ -108,7 +108,6 @@ def test_pipeline(
     output_image_path: str,
     gpu_device: str,
 ):
-
     # load pre-trained weight with paint with words pipeline
     pipe = PaintWithWordsPipeline.from_pretrained(
         model_name,

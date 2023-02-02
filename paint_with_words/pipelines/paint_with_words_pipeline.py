@@ -86,19 +86,16 @@ class PaintWithWordsPipeline(StableDiffusionPipeline):
     def replace_cross_attention(
         self, cross_attention_name: str = "CrossAttention"
     ) -> None:
-
         for m in self.unet.modules():
             if m.__class__.__name__ == cross_attention_name:
                 m.__class__.__call__ = paint_with_words_forward
 
     def separate_image_context(self, img: PilImage, color_context: Dict[RGB, str]):
-
         assert img.width % 32 == 0 and img.height % 32 == 0, img.size
 
         separated_image_and_context: List[SeparatedImageContext] = []
 
         for rgb_color, word_with_weight in color_context.items():
-
             # e.g.,
             # rgb_color: (0, 0, 0)
             # word_with_weight: cat,1.0
@@ -158,7 +155,6 @@ class PaintWithWordsPipeline(StableDiffusionPipeline):
         separated_image_context_list: List[SeparatedImageContext],
         ratio: int,
     ) -> th.Tensor:
-
         prompt_token_ids = self.tokenizer(
             input_prompt,
             padding="max_length",
@@ -235,7 +231,6 @@ class PaintWithWordsPipeline(StableDiffusionPipeline):
         callback: Optional[Callable[[int, int, th.FloatTensor], None]] = None,
         callback_steps: Optional[int] = 1,
     ) -> StableDiffusionPipelineOutput:
-
         assert isinstance(prompt, str), type(prompt)
         assert guidance_scale > 1.0, guidance_scale
 
@@ -318,7 +313,6 @@ class PaintWithWordsPipeline(StableDiffusionPipeline):
         num_warmup_steps = len(timesteps) - num_inference_steps * self.scheduler.order
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
-
                 assert isinstance(self.scheduler, LMSDiscreteScheduler)
                 step_index = (self.scheduler.timesteps == t).nonzero().item()
                 sigma = self.scheduler.sigmas[step_index]

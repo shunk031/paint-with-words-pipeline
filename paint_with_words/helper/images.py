@@ -18,7 +18,6 @@ def resize_image(img: PilImage, w: int, h: int) -> PilImage:
 
 
 def flatten_image_importance(img_th: th.Tensor, ratio: int) -> th.Tensor:
-
     # shape: (h, w) -> (1, 1, h, w)
     img_th = img_th.view(1, 1, *img_th.size())
 
