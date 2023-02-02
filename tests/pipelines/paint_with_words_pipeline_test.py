@@ -1,7 +1,6 @@
 from typing import Dict
 
 import pytest
-import torch
 import torch as th
 from diffusers.schedulers import LMSDiscreteScheduler
 from PIL import Image
@@ -112,7 +111,7 @@ def test_pipeline(
     pipe = PaintWithWordsPipeline.from_pretrained(
         model_name,
         revision="fp16",
-        torch_dtype=torch.float16,
+        torch_dtype=th.float16,
     )
     pipe.safety_checker = None  # disable the safety checker
     pipe.to(gpu_device)
@@ -121,8 +120,8 @@ def test_pipeline(
     assert isinstance(pipe.scheduler, LMSDiscreteScheduler), type(pipe.scheduler)
 
     # generate latents with seed-fixed generator
-    generator = torch.manual_seed(0)
-    latents = torch.randn((1, 4, 64, 64), generator=generator)
+    generator = th.manual_seed(0)
+    latents = th.randn((1, 4, 64, 64), generator=generator)
 
     # load color map image
     color_map_image = Image.open(color_map_image_path)
@@ -130,9 +129,9 @@ def test_pipeline(
     # generate image using the pipeline
     with th.autocast("cuda"):
         image = pipe(
-            prompt=input_prompt,
-            color_context=color_context,
-            color_map_image=color_map_image,
+            prompts=input_prompt,
+            color_contexts=color_context,
+            color_map_images=color_map_image,
             latents=latents,
             num_inference_steps=30,
         ).images[0]
@@ -155,7 +154,7 @@ def test_separate_image_context(
     pipe = PaintWithWordsPipeline.from_pretrained(
         model_name,
         revision="fp16",
-        torch_dtype=torch.float16,
+        torch_dtype=th.float16,
     )
 
     color_map_image = pipe.load_image(color_map_image_path)
@@ -168,7 +167,7 @@ def test_separate_image_context(
         assert isinstance(ret, SeparatedImageContext)
         assert isinstance(ret.word, str)
         assert isinstance(ret.token_ids, list)
-        assert isinstance(ret.color_map_th, torch.Tensor)
+        assert isinstance(ret.color_map_th, th.Tensor)
 
         token_ids = pipe.tokenizer(
             ret.word,
@@ -193,7 +192,7 @@ def test_calculate_tokens_image_attention_weight(
     pipe = PaintWithWordsPipeline.from_pretrained(
         model_name,
         revision="fp16",
-        torch_dtype=torch.float16,
+        torch_dtype=th.float16,
     )
 
     color_map_image = pipe.load_image(color_map_image_path)
@@ -246,3 +245,44 @@ def test_calculate_tokens_image_attention_weight(
         int((w * 1 / 64) * (h * 1 / 64)),
         pipe.tokenizer.model_max_length,
     )
+
+
+@pytest.mark.skipif(
+    not th.cuda.is_available(),
+    reason="No GPUs available for testing.",
+)
+def test_batch_pipeline(model_name: str, gpu_device: str):
+    # load pre-trained weight with paint with words pipeline
+    pipe = PaintWithWordsPipeline.from_pretrained(
+        model_name,
+        revision="fp16",
+        torch_dtype=th.float16,
+    )
+    pipe.safety_checker = None  # disable the safety checker
+    pipe.to(gpu_device)
+
+    # check the scheduler is LMSDiscreteScheduler
+    assert isinstance(pipe.scheduler, LMSDiscreteScheduler), type(pipe.scheduler)
+
+    # generate latents with seed-fixed generator
+    generator = th.manual_seed(0)
+    latents = th.randn((1, 4, 64, 64), generator=generator)
+    latents = latents.repeat(2, 1, 1, 1)  # shape: (1, 4, 64, 64) -> (2, 4, 64, 64)
+
+    batch_examples = [EXAMPLE_SETTING_1, EXAMPLE_SETTING_3]
+
+    with th.autocast("cuda"):
+        pipe_output = pipe(
+            prompts=[example["input_prompt"] for example in batch_examples],
+            color_contexts=[example["color_context"] for example in batch_examples],
+            color_map_images=[
+                example["color_map_image_path"] for example in batch_examples
+            ],
+            latents=latents,
+            num_inference_steps=30,
+        )
+    images = pipe_output.images
+
+    for image, example in zip(images, batch_examples):
+        content_dir, image_filename = example["output_image_path"].split("/")  # type: ignore
+        image.save(f"{content_dir}/batch_{image_filename}")
