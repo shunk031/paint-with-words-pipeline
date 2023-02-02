@@ -55,7 +55,6 @@ def test_resize_image():
 def test_separate_image_context(
     model_name: str, color_context: Dict[RGB, str], color_map_image_path: str
 ):
-
     tokenizer = CLIPTokenizer.from_pretrained(model_name, subfolder="tokenizer")
 
     color_map_image = load_image(color_map_image_path)
@@ -88,7 +87,6 @@ def test_calculate_tokens_image_attention_weight(
     color_map_image_path: str,
     input_prompt: str,
 ):
-
     tokenizer = CLIPTokenizer.from_pretrained(model_name, subfolder="tokenizer")
 
     color_map_image = load_image(color_map_image_path)

@@ -19,7 +19,6 @@ def test_paint_with_words_hidden_states():
 
 
 def test_separated_image_context():
-
     separated_image_context = SeparatedImageContext(
         word="cat",
         token_ids=[2368],
