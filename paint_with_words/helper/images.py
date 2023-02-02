@@ -59,13 +59,11 @@ def separate_image_context(
     color_context: Dict[RGB, str],
     device: str,
 ) -> List[SeparatedImageContext]:
-
     assert img.width % 32 == 0 and img.height % 32 == 0, img.size
 
     separated_image_and_context: List[SeparatedImageContext] = []
 
     for rgb_color, word_with_weight in color_context.items():
-
         # e.g.,
         # rgb_color: (0, 0, 0)
         # word_with_weight: cat,1.0
@@ -127,7 +125,6 @@ def calculate_tokens_image_attention_weight(
     ratio: int,
     device: str,
 ) -> th.Tensor:
-
     prompt_token_ids = tokenizer(
         input_prompt,
         padding="max_length",
@@ -166,5 +163,9 @@ def calculate_tokens_image_attention_weight(
             logger.warning(
                 f"Warning ratio {ratio} : tokens {context_token_ids} not found in text"
             )
+
+    # add dimension for the batch
+    # shape: (w_r * h_r, len(prompt_token_ids)) -> (1, w_r * h_r, len(prompt_token_ids))
+    ret_tensor = ret_tensor.unsqueeze(dim=0)
 
     return ret_tensor
