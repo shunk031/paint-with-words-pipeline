@@ -284,5 +284,5 @@ def test_batch_pipeline(model_name: str, gpu_device: str):
     images = pipe_output.images
 
     for image, example in zip(images, batch_examples):
-        content_dir, image_filename = example["output_image_path"].split("/")
+        content_dir, image_filename = example["output_image_path"].split("/")  # type: ignore
         image.save(f"{content_dir}/batch_{image_filename}")
