@@ -13,7 +13,6 @@ def paint_with_words_forward(
     context: Optional[PaintWithWordsHiddenStates] = None,
     mask: Optional[th.Tensor] = None,
 ) -> th.Tensor:
-
     is_dict_format = True
     if context is not None:
         try:

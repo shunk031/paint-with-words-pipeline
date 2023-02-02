@@ -99,7 +99,6 @@ class PaintWithWordsPipeline(StableDiffusionPipeline):
         separated_image_context_list: List[SeparatedImageContext],
         ratio: int,
     ) -> th.Tensor:
-
         return calculate_tokens_image_attention_weight(
             tokenizer=self.tokenizer,
             input_prompt=input_prompt,
@@ -114,7 +113,6 @@ class PaintWithWordsPipeline(StableDiffusionPipeline):
         color_map_image: Union[str, os.PathLike, PilImage],
         color_context: ColorContext,
     ):
-
         # 0. Default height and width to unet and resize the color map image
         color_map_image = load_image(image=color_map_image)
         width, height = get_resize_size(img=color_map_image)
@@ -205,7 +203,6 @@ class PaintWithWordsPipeline(StableDiffusionPipeline):
         callback: Optional[Callable[[int, int, th.FloatTensor], None]] = None,
         callback_steps: Optional[int] = 1,
     ) -> StableDiffusionPipelineOutput:
-
         if not isinstance(prompts, list):
             prompts = [prompts]
         if not isinstance(color_contexts, list):
@@ -271,7 +268,6 @@ class PaintWithWordsPipeline(StableDiffusionPipeline):
         num_warmup_steps = len(timesteps) - num_inference_steps * self.scheduler.order
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
-
                 assert isinstance(self.scheduler, LMSDiscreteScheduler)
                 step_index = (self.scheduler.timesteps == t).nonzero().item()
                 sigma = self.scheduler.sigmas[step_index]
