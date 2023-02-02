@@ -209,6 +209,7 @@ def test_calculate_tokens_image_attention_weight(
         ratio=8,
     )
     assert cross_attention_weight_8.size() == (
+        1,
         int((w * 1 / 8) * (h * 1 / 8)),
         pipe.tokenizer.model_max_length,
     )
@@ -219,6 +220,7 @@ def test_calculate_tokens_image_attention_weight(
         ratio=16,
     )
     assert cross_attention_weight_16.size() == (
+        1,
         int((w * 1 / 16) * (h * 1 / 16)),
         pipe.tokenizer.model_max_length,
     )
@@ -229,6 +231,7 @@ def test_calculate_tokens_image_attention_weight(
         ratio=32,
     )
     assert cross_attention_weight_32.size() == (
+        1,
         int((w * 1 / 32) * (h * 1 / 32)),
         pipe.tokenizer.model_max_length,
     )
@@ -239,6 +242,7 @@ def test_calculate_tokens_image_attention_weight(
         ratio=64,
     )
     assert cross_attention_weight_64.size() == (
+        1,
         int((w * 1 / 64) * (h * 1 / 64)),
         pipe.tokenizer.model_max_length,
     )
