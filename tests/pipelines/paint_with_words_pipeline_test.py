@@ -191,7 +191,7 @@ def test_calculate_attention_maps(
     output_image_path: str,
     attention_ratios: Tuple[int, ...] = (8, 16, 32, 64),
 ):
-    pipe = PaintWithWordsPipeline.from_pretrained(
+    pipe: PaintWithWordsPipeline = PaintWithWordsPipeline.from_pretrained(  # type: ignore
         model_name,
         revision="fp16",
         torch_dtype=torch.float16,
@@ -206,7 +206,7 @@ def test_calculate_attention_maps(
 
     attention_maps = pipe.calculate_attention_maps(
         input_prompt=input_prompt,
-        separated_image_context_lists=separated_image_context_list,
+        separated_image_context_list=separated_image_context_list,
         ratios=attention_ratios,
     )
     assert len(attention_maps) == len(attention_ratios)

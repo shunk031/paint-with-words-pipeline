@@ -262,7 +262,6 @@ class PaintWithWordsPipeline(StableDiffusionPipeline, TextualInversionLoaderMixi
         attention_ratios: Tuple[int, ...] = (8, 16, 32, 64),
     ) -> StableDiffusionPipelineOutput:
         cross_attention_kwargs = cross_attention_kwargs or {}
-        cross_attention_kwargs["weight_function"] = weight_function
 
         # 0. Default height and width to unet and resize the color map image
         color_map_image = self.load_image(image=color_map_image)
@@ -350,6 +349,9 @@ class PaintWithWordsPipeline(StableDiffusionPipeline, TextualInversionLoaderMixi
         num_warmup_steps = len(timesteps) - num_inference_steps * self.scheduler.order
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
+                #
+                # prepare for latents and sigma
+                #
                 assert isinstance(self.scheduler, LMSDiscreteScheduler)
                 step_index = (self.scheduler.timesteps == t).nonzero().item()
                 sigma_t = self.scheduler.sigmas[step_index]
@@ -364,10 +366,14 @@ class PaintWithWordsPipeline(StableDiffusionPipeline, TextualInversionLoaderMixi
                 )
                 assert latent_model_input.size() == expected_latent_size
 
+                #
+                # prepare cross attention weights for conditional situation
+                #
                 assert len(attention_ratios) == len(attention_maps)
                 for i, ratio in enumerate(attention_ratios):
                     attn_img_size = height * width // (ratio * ratio)
                     cross_attention_kwargs[f"w_{attn_img_size}"] = attention_maps[i]
+                cross_attention_kwargs["weight_function"] = weight_function
 
                 # predict the noise residual
                 noise_pred_text = self.unet(
@@ -378,11 +384,20 @@ class PaintWithWordsPipeline(StableDiffusionPipeline, TextualInversionLoaderMixi
                     return_dict=False,
                 )[0]
 
+                #
+                # Prepare for latents
+                #
                 latent_model_input = self.scheduler.scale_model_input(latents, t)
 
+                #
+                # prepare cross attention weights for unconditional situation
+                #
                 for i, ratio in enumerate(attention_ratios):
                     attn_img_size = height * width // (ratio * ratio)
                     cross_attention_kwargs[f"w_{attn_img_size}"] = 0.0
+                cross_attention_kwargs[
+                    "weight_function"
+                ] = UnconditionedWeightFunction()
 
                 noise_pred_uncond = self.unet(
                     latent_model_input,
