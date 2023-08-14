@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Dict, Tuple
 
 import pytest
 import torch
@@ -183,12 +183,13 @@ def test_separate_image_context(
     argnames=",".join(ARGNAMES),
     argvalues=ARGVALUES,
 )
-def test_calculate_tokens_image_attention_weight(
+def test_calculate_attention_maps(
     model_name: str,
     color_context: Dict[RGB, str],
     color_map_image_path: str,
     input_prompt: str,
     output_image_path: str,
+    attention_ratios: Tuple[int, ...] = (8, 16, 32, 64),
 ):
     pipe = PaintWithWordsPipeline.from_pretrained(
         model_name,
@@ -203,46 +204,16 @@ def test_calculate_tokens_image_attention_weight(
         img=color_map_image, color_context=color_context
     )
 
-    cross_attention_weight_8 = pipe.calculate_tokens_image_attention_weight(
+    attention_maps = pipe.calculate_attention_maps(
         input_prompt=input_prompt,
-        separated_image_context_list=separated_image_context_list,
-        ratio=8,
+        separated_image_context_lists=separated_image_context_list,
+        ratios=attention_ratios,
     )
-    assert cross_attention_weight_8.size() == (
-        1,
-        int((w * 1 / 8) * (h * 1 / 8)),
-        pipe.tokenizer.model_max_length,
-    )
-
-    cross_attention_weight_16 = pipe.calculate_tokens_image_attention_weight(
-        input_prompt=input_prompt,
-        separated_image_context_list=separated_image_context_list,
-        ratio=16,
-    )
-    assert cross_attention_weight_16.size() == (
-        1,
-        int((w * 1 / 16) * (h * 1 / 16)),
-        pipe.tokenizer.model_max_length,
-    )
-
-    cross_attention_weight_32 = pipe.calculate_tokens_image_attention_weight(
-        input_prompt=input_prompt,
-        separated_image_context_list=separated_image_context_list,
-        ratio=32,
-    )
-    assert cross_attention_weight_32.size() == (
-        1,
-        int((w * 1 / 32) * (h * 1 / 32)),
-        pipe.tokenizer.model_max_length,
-    )
-
-    cross_attention_weight_64 = pipe.calculate_tokens_image_attention_weight(
-        input_prompt=input_prompt,
-        separated_image_context_list=separated_image_context_list,
-        ratio=64,
-    )
-    assert cross_attention_weight_64.size() == (
-        1,
-        int((w * 1 / 64) * (h * 1 / 64)),
-        pipe.tokenizer.model_max_length,
-    )
+    assert len(attention_maps) == len(attention_ratios)
+    for attention_map, ratio in zip(attention_maps, attention_ratios):
+        expected_attention_map_size = (
+            1,
+            int((w * 1 / ratio) * (h * 1 / ratio)),
+            pipe.tokenizer.model_max_length,
+        )
+        assert attention_map.size() == expected_attention_map_size
